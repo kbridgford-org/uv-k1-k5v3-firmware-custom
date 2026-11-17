@@ -1,0 +1,45 @@
+diff --git a/qemu/py32f071.c b/qemu/py32f071.c
+--- a/qemu/py32f071.c
++++ b/qemu/py32f071.c
+@@ -601,7 +601,6 @@ static void keypad_key_changed(void *opaque, int line, int level)
+     }
+     s->pressed[col][row] = level != 0;
+     if (level != 0) {
+-        extern int ever_pressed_global;
+         ever_pressed_global = 1;
+         fprintf(stderr, "KEYDOWN col=%d row=%d line=%d\n", col, row, line);
+     }
+diff --git a/tools/webui.py b/tools/webui.py
+--- a/tools/webui.py
++++ b/tools/webui.py
+@@ -1561,7 +1561,8 @@ def main() -> int:
+-    try:
+-        image.set(os.path.expanduser(args.elf))
+-    except ImageError as exc:
+-        # Not fatal: the page can load one, and saying so beats refusing to
+-        # start because a default path from another machine is missing.
+-        log.add("firmware", "no firmware loaded yet: %s" % exc)
+-        print("no firmware loaded yet: %s" % exc)
++    if args.elf:
++        try:
++            image.set(os.path.expanduser(args.elf))
++        except ImageError as exc:
++            # Not fatal: the page can load one, and saying so beats refusing to
++            # start because a default path from another machine is missing.
++            log.add("firmware", "no firmware loaded yet: %s" % exc)
++            print("no firmware loaded yet: %s" % exc)
+diff --git a/tools/uvk5_socket.py b/tools/uvk5_socket.py
+--- a/tools/uvk5_socket.py
++++ b/tools/uvk5_socket.py
+@@ -96,8 +96,10 @@ def connect(endpoint: str, timeout: float = 20.0):
+     kind, _, rest = endpoint.partition(":")
+-    if kind not in ("unix", "tcp"):
++    if endpoint.startswith("/"):
++        kind, rest = "unix", endpoint
++    elif kind not in ("unix", "tcp"):
+         # A bare "host:port", which is what the supervisor, the web UI and the README
+         # have always passed. Read as a scheme, its "host" is the address itself and
+         # the port is empty, so the connect goes to an empty host and hangs until the
+         # deadline -- which reads as "the emulator never started" while the guest is
+         # running happily. That shipped once and cost a page that would not power on.
+         kind, rest = "tcp", endpoint

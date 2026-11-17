@@ -50,6 +50,7 @@ Special thanks to Jean-Cyrille F6IWW (3 times), Fabrice 14RC123, Olivier 14RC206
 * [Main Features from Egzumer](#main-features-from-egzumer)
 * [Manual](#manual)
 * [Compiling and Building from Docker](#compiling-and-Building-from-docker)
+* [UV-K1 / UV-K5 V3 Emulator Canvas](#uv-k1--uv-k5-v3-emulator-canvas)
 * [Flashing the Firmware with UV Studio](#flashing-the-firmware-with-uv-studio)
 * [Credits](#credits)
 * [Other sources of information](#other-sources-of-information)
@@ -542,6 +543,12 @@ remains an explicit Git operation.
 
 - The first run may take a few minutes while Docker builds the base image.
 - Each build runs inside Docker, so your host environment remains clean.
+
+## UV-K1 / UV-K5 V3 Emulator Canvas
+
+This repository includes a Copilot canvas that launches a local emulator with a
+live LCD view, keypad, and firmware controls. See
+[tools/emulator/README.md](tools/emulator/README.md) for Docker setup and use.
 
 ## Flashing the Firmware with UV Studio
 
