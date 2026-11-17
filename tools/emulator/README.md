@@ -74,9 +74,10 @@ access to the repository.
 To run the same check locally after `setup.sh` and a Fusion build:
 
 ```sh
-tools/emulator/run-ci.sh build/Fusion/f4hwn.fusion.bin ccr-evidence
+tools/emulator/run-ci.sh build/Fusion/f4hwn.fusion.bin
 ```
 
-The script exits nonzero if any step fails and writes `results.json`, the
-screenshots, and status, panel, firmware, and log JSON to the output directory.
-Set `UVK5_CI_PORT` if port 18080 is in use.
+Output goes to `$TMPDIR/ccr-evidence` (or `/tmp/ccr-evidence`) unless you pass
+a second argument. The script exits nonzero if any step fails and writes
+`results.json`, the screenshots, and status, panel, firmware, and log JSON to
+the output directory. Set `UVK5_CI_PORT` if port 18080 is in use.

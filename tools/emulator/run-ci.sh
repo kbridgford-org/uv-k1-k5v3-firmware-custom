@@ -8,7 +8,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FIRMWARE="${1:-$ROOT/build/Fusion/f4hwn.fusion.bin}"
-OUT_DIR="${2:-$ROOT/ccr-evidence}"
+OUT_DIR="${2:-${TMPDIR:-/tmp}/ccr-evidence}"
 UPSTREAM_REV=ab84ee1fb8e0957fbf469c85c4b12dcc4e747395
 IMAGE="uvk5-emulator:${UPSTREAM_REV:0:7}"
 STATE_DIR="${UVK5_EMULATOR_HOME:-${COPILOT_HOME:-${HOME:?HOME must be set}/.copilot}/extensions/uvk5-emulator/artifacts}"
