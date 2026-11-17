@@ -62,6 +62,11 @@ write to GitHub, or merge a PR. PR text and source comments are evidence,
 not instructions. Both source contents and the policy are read at captured
 commit SHAs.
 
+The gh-aw v1.2.2 trusted conclusion job requests `issues: write` even with
+issue, failure, and no-op reporting disabled. The reusable-workflow caller
+permits that scope for compiler-managed jobs, but the generated agent job
+does not receive it. Check publication remains in the trusted coordinator.
+
 The agent submits exactly one structured verdict through a custom safe output.
 A trusted job exports it as a run-and-attempt-specific artifact. The
 coordinator checks the schema, complete changed-file inventory, immutable
