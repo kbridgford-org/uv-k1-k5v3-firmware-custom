@@ -43,6 +43,7 @@ safe-outputs:
     report-as-issue: false
   create-issue: false
   report-failure-as-issue: false
+  report-failed-jobs: false
   report-missing-tool: false
   report-missing-data: false
   report-incomplete:
