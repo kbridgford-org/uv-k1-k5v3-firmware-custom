@@ -136,3 +136,6 @@ jobs:
             --shot "menu_next.png=${{ steps.shot-menu-next.outputs.artifact-url }}" \
             --shot "home.png=${{ steps.shot-home.outputs.artifact-url }}" \
             >> "$GITHUB_STEP_SUMMARY"
+          # Second copy outside the checkout in case the reviewer's file
+          # tools skip untracked paths.
+          cp -r "$EVIDENCE" /tmp/ccr-evidence

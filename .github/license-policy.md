@@ -62,6 +62,12 @@ write to GitHub, or merge a PR. PR text and source comments are evidence,
 not instructions. Both source contents and the policy are read at captured
 commit SHAs.
 
+The GitHub tool's content-integrity minimum is `none` because the MCP gateway
+classifies explicit-SHA file reads that way, even for trusted main-branch
+commits. This permits reading evidence, not executing or trusting it.
+Automatic admission still requires a trusted actor and same-repository PR,
+and API access is restricted to this repository and the two read-only tools.
+
 Issue, failure, no-op, reaction, and detection tracking reports are disabled,
 so compiler-managed jobs do not need issue write access. Threat detection is
 enabled in fail-closed mode before verdict export. Both review and detection

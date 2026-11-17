@@ -9,11 +9,14 @@ Before this review started, the `copilot-setup-steps` job in
 `.github/workflows/copilot-code-review.yml` built this pull request's Fusion
 firmware, booted it in the UV-K5 emulator, pressed MENU, DOWN, and EXIT, and
 captured LCD screenshots. The results are in `ccr-evidence/SUMMARY.md` in the
-working directory, with raw data in `ccr-evidence/results.json`.
+repository root (an untracked file, not part of the diff), with raw data in
+`ccr-evidence/results.json`. An identical copy is at `/tmp/ccr-evidence/`.
 
 When reviewing a pull request:
 
-1. Read `ccr-evidence/SUMMARY.md` before writing the review.
+1. Read `ccr-evidence/SUMMARY.md` before writing the review. Open it by path; it
+   won't appear in the diff or in searches that skip untracked files. If it
+   can't be read there, read `/tmp/ccr-evidence/SUMMARY.md`.
 2. Start the review overview with a section titled `### 📟 Emulator evidence`.
    Copy the step table from `SUMMARY.md` as is, including the Markdown screenshot
    links, then add the tested commit and the workflow run link. Don't rewrite or
