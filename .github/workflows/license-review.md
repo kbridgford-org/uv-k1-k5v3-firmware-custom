@@ -2,6 +2,8 @@
 name: License review agent
 description: Evaluate newly introduced licensing against the trusted base policy.
 on:
+  reaction: none
+  status-comment: false
   workflow_call:
     inputs:
       pr_number:
@@ -31,6 +33,12 @@ tools:
     min-integrity: approved
     allowed: [get_file_contents, pull_request_read]
 safe-outputs:
+  create-issue: false
+  report-failure-as-issue: false
+  report-missing-tool: false
+  report-missing-data: false
+  noop:
+    report-as-issue: false
   jobs:
     license-verdict:
       description: Submit the single final structured license review verdict.

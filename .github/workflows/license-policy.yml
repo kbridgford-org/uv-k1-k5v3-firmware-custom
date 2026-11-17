@@ -60,7 +60,9 @@ jobs:
     needs: initialize
     if: needs.initialize.outputs.eligible == 'true'
     permissions:
+      actions: read
       contents: read
+      issues: write
       pull-requests: read
       copilot-requests: write
     uses: ./.github/workflows/license-review.lock.yml
