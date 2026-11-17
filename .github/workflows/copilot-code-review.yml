@@ -1,0 +1,133 @@
+# Environment for Copilot code review. GitHub runs this job before every Copilot
+# review, so the reviewer starts with the PR's firmware already booted in the
+# emulator, screenshots uploaded, and ccr-evidence/SUMMARY.md on disk.
+# .github/instructions/emulator-review.instructions.md tells Copilot how to use it.
+#
+# The job must be named copilot-setup-steps. It also runs on changes to this
+# file or the harness, and on demand, so the setup can be checked in Actions.
+name: Copilot code review setup
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-code-review.yml
+      - tools/emulator/**
+  pull_request:
+    paths:
+      - .github/workflows/copilot-code-review.yml
+      - tools/emulator/**
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 59
+    permissions:
+      contents: read
+    env:
+      UVK5_EMULATOR_HOME: /tmp/uvk5-emulator
+      EVIDENCE: ccr-evidence
+      FIRMWARE: build/Fusion/f4hwn.fusion.bin
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Restore emulator image
+        id: emulator-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/uvk5-emulator-image.tar
+          key: uvk5-emulator-${{ hashFiles('tools/emulator/Dockerfile', 'tools/emulator/patches/**', 'tools/emulator/setup.sh') }}
+
+      - name: Load cached emulator image
+        if: steps.emulator-cache.outputs.cache-hit == 'true'
+        run: |
+          docker load -i /tmp/uvk5-emulator-image.tar
+          # Tell setup.sh the loaded image matches the current Dockerfile and patch.
+          rev="$(sed -n 's/^UPSTREAM_REV=//p' tools/emulator/setup.sh)"
+          mkdir -p "$UVK5_EMULATOR_HOME"
+          cat tools/emulator/Dockerfile tools/emulator/patches/uvk5-emulator-runtime.patch \
+            | sha256sum | awk '{print $1}' > "$UVK5_EMULATOR_HOME/docker-image-$rev.sha256"
+
+      # One step that never fails: a failing setup step would skip the rest, and
+      # Copilot should still review and report what broke.
+      - name: Build firmware, boot emulator, run smoke test
+        run: |
+          set +e
+          mkdir -p "$EVIDENCE"
+          ./compile-firmware.sh Fusion > "$EVIDENCE/build.log" 2>&1
+          fw=$?
+          bash tools/emulator/setup.sh >> "$EVIDENCE/build.log" 2>&1
+          emu=$?
+          echo "firmware build exit=$fw, emulator setup exit=$emu"
+          if [ "$fw" -eq 0 ] && [ "$emu" -eq 0 ]; then
+            tools/emulator/run-ci.sh "$FIRMWARE" "$EVIDENCE"
+          fi
+          exit 0
+
+      - name: Save emulator image for cache
+        if: steps.emulator-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: |
+          rev="$(sed -n 's/^UPSTREAM_REV=//p' tools/emulator/setup.sh)"
+          docker save "uvk5-emulator:${rev:0:7}" -o /tmp/uvk5-emulator-image.tar
+
+      # archive: false uploads each PNG on its own, so its link opens the image
+      # instead of downloading a ZIP.
+      - name: Upload boot screenshot
+        id: shot-boot
+        if: hashFiles('ccr-evidence/boot.png') != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          path: ccr-evidence/boot.png
+          archive: false
+
+      - name: Upload menu screenshot
+        id: shot-menu
+        if: hashFiles('ccr-evidence/menu.png') != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          path: ccr-evidence/menu.png
+          archive: false
+
+      - name: Upload menu navigation screenshot
+        id: shot-menu-next
+        if: hashFiles('ccr-evidence/menu_next.png') != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          path: ccr-evidence/menu_next.png
+          archive: false
+
+      - name: Upload home screenshot
+        id: shot-home
+        if: hashFiles('ccr-evidence/home.png') != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          path: ccr-evidence/home.png
+          archive: false
+
+      - name: Upload evidence bundle
+        id: bundle
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: emulator-evidence
+          path: ccr-evidence/
+          if-no-files-found: ignore
+
+      - name: Write evidence summary
+        run: |
+          python3 tools/emulator/ci_summary.py "$EVIDENCE" \
+            --firmware "$FIRMWARE" \
+            --bundle-url "${{ steps.bundle.outputs.artifact-url }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --shot "boot.png=${{ steps.shot-boot.outputs.artifact-url }}" \
+            --shot "menu.png=${{ steps.shot-menu.outputs.artifact-url }}" \
+            --shot "menu_next.png=${{ steps.shot-menu-next.outputs.artifact-url }}" \
+            --shot "home.png=${{ steps.shot-home.outputs.artifact-url }}" \
+            >> "$GITHUB_STEP_SUMMARY"
