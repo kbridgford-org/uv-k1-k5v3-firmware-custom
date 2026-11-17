@@ -1,0 +1,120 @@
+name: PR license policy
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: license-policy-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  initialize:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: read
+    outputs:
+      check_id: ${{ steps.pending.outputs.check_id }}
+      eligible: ${{ steps.trust.outputs.eligible }}
+    steps:
+      - name: Mark the exact PR head pending
+        id: pending
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const result = await github.rest.checks.create({
+              ...context.repo,
+              name: 'License policy',
+              head_sha: pr.head.sha,
+              status: 'in_progress',
+              external_id: `license-policy:${context.runId}:${process.env.GITHUB_RUN_ATTEMPT}:${pr.number}:${pr.base.sha}:${pr.head.sha}`,
+              details_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              output: {
+                title: 'Agent license review pending',
+                summary: 'Only a valid agent verdict for this exact revision can pass.'
+              }
+            });
+            core.setOutput('check_id', result.data.id);
+      - name: Admit trusted actors only
+        id: trust
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              ...context.repo,
+              username: context.actor
+            });
+            if (!['admin', 'maintain', 'write'].includes(data.permission)) {
+              throw new Error('Automatic license review requires trusted repository access');
+            }
+            core.setOutput('eligible', 'true');
+
+  analyze:
+    needs: initialize
+    if: needs.initialize.outputs.eligible == 'true'
+    permissions:
+      contents: read
+      pull-requests: read
+      copilot-requests: write
+    uses: ./.github/workflows/license-review.lock.yml
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      base_sha: ${{ github.event.pull_request.base.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha }}
+
+  finalize:
+    needs: [initialize, analyze]
+    if: always() && needs.initialize.outputs.check_id != ''
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: read
+      actions: read
+    steps:
+      - name: Read trusted publication code
+        id: source
+        continue-on-error: true
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: tools/license-review
+      - name: Download only this attempt's result
+        id: artifact
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: license-verdict-${{ github.run_id }}-${{ github.run_attempt }}
+          path: license-result
+      - name: Publish the agent decision or an explicit error
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          CHECK_ID: ${{ needs.initialize.outputs.check_id }}
+          ANALYSIS_RESULT: ${{ needs.analyze.result }}
+          SOURCE_RESULT: ${{ steps.source.outcome }}
+          ARTIFACT_RESULT: ${{ steps.artifact.outcome }}
+        with:
+          script: |
+            if (process.env.SOURCE_RESULT !== 'success') {
+              await github.rest.checks.update({
+                ...context.repo,
+                check_run_id: Number(process.env.CHECK_ID),
+                status: 'completed',
+                conclusion: 'failure',
+                output: {
+                  title: 'License review infrastructure failed',
+                  summary: 'Trusted publication code could not be loaded. No license approval was issued.'
+                }
+              });
+              core.setFailed('Trusted license publication code could not be loaded');
+              return;
+            }
+            await require('./tools/license-review/check.cjs').finalize({ github, context, core });
