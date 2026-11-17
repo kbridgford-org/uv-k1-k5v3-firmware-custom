@@ -19,7 +19,9 @@ permissions:
   contents: read
   pull-requests: read
   copilot-requests: write
-engine: copilot
+engine:
+  id: copilot
+  model: gpt-5.3-codex
 checkout: false
 network:
   allowed: []
@@ -33,10 +35,19 @@ tools:
     min-integrity: approved
     allowed: [get_file_contents, pull_request_read]
 safe-outputs:
+  threat-detection:
+    engine:
+      id: copilot
+      model: gpt-5.3-codex
+    continue-on-error: false
+    report-as-issue: false
   create-issue: false
   report-failure-as-issue: false
+  report-failed-jobs: false
   report-missing-tool: false
   report-missing-data: false
+  report-incomplete:
+    create-issue: false
   noop:
     report-as-issue: false
   jobs:

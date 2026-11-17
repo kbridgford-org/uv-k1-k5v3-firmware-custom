@@ -62,7 +62,6 @@ jobs:
     permissions:
       actions: read
       contents: read
-      issues: write
       pull-requests: read
       copilot-requests: write
     uses: ./.github/workflows/license-review.lock.yml
