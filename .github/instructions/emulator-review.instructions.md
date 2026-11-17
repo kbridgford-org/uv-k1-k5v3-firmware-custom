@@ -1,0 +1,32 @@
+---
+applyTo: "**"
+excludeAgent: "coding-agent"
+---
+
+# Emulator evidence in code reviews
+
+Before this review started, the `copilot-setup-steps` job in
+`.github/workflows/copilot-code-review.yml` built this pull request's Fusion
+firmware, booted it in the UV-K5 emulator, pressed MENU, DOWN, and EXIT, and
+captured LCD screenshots. The results are in `ccr-evidence/SUMMARY.md` in the
+working directory, with raw data in `ccr-evidence/results.json`.
+
+When reviewing a pull request:
+
+1. Read `ccr-evidence/SUMMARY.md` before writing the review.
+2. Start the review overview with a section titled `### 📟 Emulator evidence`.
+   Copy the step table from `SUMMARY.md` as is, including the Markdown screenshot
+   links, then add the tested commit and the workflow run link. Don't rewrite or
+   shorten the screenshot URLs.
+3. If the result is FAILED, or `SUMMARY.md` is missing, say so at the top of the
+   section and explain the most likely cause from the build or emulator log tail.
+   If the diff touches the code involved (UI, menus, keypad, boot, display),
+   connect the failure to specific changed lines in a review comment.
+4. If the diff changes what the screen shows (`App/ui/`, `App/app/menu.c`,
+   `App/app/main.c`, fonts, bitmaps, strings), point the reader to the matching
+   screenshot and note anything in the PR description it should confirm.
+5. Only make claims the evidence supports. The emulator covers boot, LCD, and
+   keypad behavior. It does not emulate RF, audio, or exact timing, so don't
+   present a pass as proof of radio behavior.
+6. If the tested commit in `SUMMARY.md` doesn't match the pull request head,
+   note that the evidence may be stale.

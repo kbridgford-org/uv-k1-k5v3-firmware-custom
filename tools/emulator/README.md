@@ -58,3 +58,25 @@ into this Apache-2.0 repository. It fetches that source with the pinned
 third-party emulator checkout and builds it into the local image or native QEMU
 executable. The setup applies a small compatibility patch for a QEMU
 `-Werror` declaration, optional firmware startup, and Unix-socket QMP handling.
+
+## Copilot code review evidence
+
+`.github/workflows/copilot-code-review.yml` is the setup job for Copilot code
+review. Before each review it builds the Fusion firmware, boots it in this
+emulator with a fresh pristine flash, and runs `smoke_test.py`: power on, wait
+for the main screen, then MENU, DOWN, and EXIT, saving a screenshot after each
+step. Each screenshot is uploaded as an unzipped artifact, and
+`ccr-evidence/SUMMARY.md` lists the results with links. The instructions in
+`.github/instructions/emulator-review.instructions.md` tell Copilot to start
+its review with that table. Artifact links require a signed-in user with read
+access to the repository.
+
+To run the same check locally after `setup.sh` and a Fusion build:
+
+```sh
+tools/emulator/run-ci.sh build/Fusion/f4hwn.fusion.bin ccr-evidence
+```
+
+The script exits nonzero if any step fails and writes `results.json`, the
+screenshots, and status, panel, firmware, and log JSON to the output directory.
+Set `UVK5_CI_PORT` if port 18080 is in use.
