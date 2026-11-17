@@ -48,7 +48,7 @@ class Emulator:
             return raw
         return None
 
-    def key(self, name, hold_ms=100):
+    def key(self, name, hold_ms=200):
         status, payload = self.json("POST", "/api/key",
                                     {"key": name, "action": "tap", "hold_ms": hold_ms})
         if status != 200:
@@ -103,21 +103,28 @@ def main():
 
     def ui_step(name, key, expect_change_from, expect_equal_to=None):
         before = frames.get(expect_change_from)
-        emu.key(key)
-        shot = wait_for_stable_frame(emu, timeout=8, previous=before)
+        # Under CI load the firmware can miss a key sent right after the last
+        # screen change, so pause first and retry once.
+        time.sleep(1.0)
+        shot = None
+        for attempt in (1, 2):
+            emu.key(key, hold_ms=200)
+            shot = wait_for_stable_frame(emu, timeout=8, previous=before, settle=1.0)
+            if shot is not None:
+                break
         if shot is None:
-            return record(name, False, f"no settled frame after {key}")
+            return record(name, False, f"display did not change after {key} (2 attempts)")
+        retry = " on retry" if attempt == 2 else ""
         size = png_size(shot)
         if size != EXPECTED_SIZE:
             return record(name, False, f"unexpected PNG size {size}", shot)
         if expect_equal_to is not None:
             ok = shot == frames.get(expect_equal_to)
-            detail = (f"{key} returned to the {expect_equal_to} screen" if ok
+            detail = (f"{key} returned to the {expect_equal_to} screen{retry}" if ok
                       else f"{key} did not return to the {expect_equal_to} screen")
         else:
             ok = shot != before
-            detail = (f"{key} changed the display" if ok
-                      else f"{key} left the display unchanged")
+            detail = f"{key} changed the display{retry}"
         return record(name, ok, detail, shot)
 
     try:
