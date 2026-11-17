@@ -67,8 +67,8 @@ emulator with a fresh pristine flash, and runs `smoke_test.py`: power on, wait
 for the main screen, then MENU, DOWN, and EXIT, saving a screenshot after each
 step. Each screenshot is uploaded as an unzipped artifact, and
 `ccr-evidence/SUMMARY.md` lists the results with links. The instructions in
-`.github/instructions/emulator-review.instructions.md` tell Copilot to start
-its review with that table. Artifact links require a signed-in user with read
+`.github/instructions/emulator-review.instructions.md` tell Copilot to post
+that table as an "Emulator evidence" review comment. Artifact links require a signed-in user with read
 access to the repository.
 
 To run the same check locally after `setup.sh` and a Fusion build:
