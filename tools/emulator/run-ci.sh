@@ -32,7 +32,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-docker run -d --rm --init --name "$CONTAINER" \
+docker run -d --init --name "$CONTAINER" \
     --publish "127.0.0.1:$PORT:8080" \
     --mount "type=bind,source=$WORK/flash.img,target=/state/flash.img" \
     --mount "type=bind,source=$WORK/uploads,target=/state/uploads" \

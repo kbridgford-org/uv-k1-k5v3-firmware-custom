@@ -24,12 +24,17 @@ jobs:
     timeout-minutes: 59
     permissions:
       contents: read
-    env:
-      UVK5_EMULATOR_HOME: /tmp/uvk5-emulator
-      EVIDENCE: ccr-evidence
-      FIRMWARE: build/Fusion/f4hwn.fusion.bin
 
     steps:
+      # Copilot's setup loader ignores job-level env, so export it here.
+      - name: Set environment
+        run: |
+          {
+            echo "UVK5_EMULATOR_HOME=/tmp/uvk5-emulator"
+            echo "EVIDENCE=ccr-evidence"
+            echo "FIRMWARE=build/Fusion/f4hwn.fusion.bin"
+          } >> "$GITHUB_ENV"
+
       - name: Checkout code
         uses: actions/checkout@v5
 

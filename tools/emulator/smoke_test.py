@@ -62,7 +62,7 @@ def png_size(data):
 
 
 def wait_for_stable_frame(emu, timeout, previous=None, settle=0.6):
-    """Return the first frame that differs from `previous` and stays put for `settle` s."""
+    """Return the first frame that differs from `previous` and stays put for `settle` s, else None."""
     deadline = time.monotonic() + timeout
     last = None
     last_change = time.monotonic()
@@ -74,7 +74,7 @@ def wait_for_stable_frame(emu, timeout, previous=None, settle=0.6):
                 and time.monotonic() - last_change >= settle):
             return last
         time.sleep(0.15)
-    return last
+    return None
 
 
 def main():
@@ -106,7 +106,7 @@ def main():
         emu.key(key)
         shot = wait_for_stable_frame(emu, timeout=8, previous=before)
         if shot is None:
-            return record(name, False, f"no frame after {key}")
+            return record(name, False, f"no settled frame after {key}")
         size = png_size(shot)
         if size != EXPECTED_SIZE:
             return record(name, False, f"unexpected PNG size {size}", shot)
@@ -129,7 +129,7 @@ def main():
         shot = wait_for_stable_frame(emu, timeout=args.boot_timeout, settle=5)
         size = png_size(shot) if shot else None
         record("boot", shot is not None and size == EXPECTED_SIZE,
-               f"main screen rendered at {size}" if shot else "no LCD frame before timeout",
+               f"main screen rendered at {size}" if shot else "LCD did not settle before timeout",
                shot)
 
         if "boot" in frames:
