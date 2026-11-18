@@ -38,6 +38,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      - name: Test emulator smoke checks
+        id: smoke-tests
+        continue-on-error: true
+        run: python3 -m unittest discover -s tools/emulator -p 'test_*.py'
+
       - name: Restore emulator image
         id: emulator-cache
         uses: actions/cache@v4
@@ -61,6 +66,10 @@ jobs:
         run: |
           set +e
           mkdir -p "$EVIDENCE"
+          if [ "${{ steps.smoke-tests.outcome }}" != "success" ]; then
+            echo '{"passed":false,"steps":[{"step":"harness","ok":false,"detail":"Smoke-test unit tests failed; see Test emulator smoke checks in the workflow run"}]}' > "$EVIDENCE/results.json"
+            exit 0
+          fi
           ./compile-firmware.sh Fusion > "$EVIDENCE/build.log" 2>&1
           fw=$?
           bash tools/emulator/setup.sh >> "$EVIDENCE/build.log" 2>&1

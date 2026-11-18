@@ -28,14 +28,21 @@ When reviewing a pull request:
    it into another comment. If the review overview has room for extra sections,
    also add the same table under `### 📟 Emulator evidence`.
 3. If the result is FAILED, or `SUMMARY.md` is missing, say so at the top of the
-   evidence comment and explain the most likely cause from the build or emulator log tail.
-   If the diff touches the code involved (UI, menus, keypad, boot, display),
-   connect the failure to specific changed lines in the evidence comment.
+   evidence comment. For a screen mismatch, compare the linked screenshots when
+   available and describe the observed difference and the reported pixel count.
+   If screenshots cannot be inspected, say so rather than guessing what they show.
+   The comparison ignores the status bar and allows small changes in the main
+   display. A mismatch warrants investigation, but does not by itself prove a
+   regression or identify its cause. For build, emulator, or missing-evidence
+   failures, use the logs to explain what is known; state when the cause is unknown.
+   Connect a failure to changed lines only when the evidence supports it.
 4. If the diff changes what the screen shows (`App/ui/`, `App/app/menu.c`,
    `App/app/main.c`, fonts, bitmaps, strings), name the matching screenshot in the
    evidence comment and note anything in the PR description it should confirm.
-5. Only make claims the evidence supports. The emulator covers boot, LCD, and
-   keypad behavior. It does not emulate RF, audio, or exact timing, so don't
-   present a pass as proof of radio behavior.
+   If the status bar is relevant, inspect it separately from the automated check.
+5. Only make claims the evidence supports. A changed or similar screenshot does
+   not verify its text, every pixel, or the status bar. The emulator covers boot,
+   LCD, and keypad behavior. It does not emulate RF, audio, or exact timing, so
+   don't present a pass as proof of radio behavior.
 6. If the tested commit in `SUMMARY.md` doesn't match the pull request head,
    note that the evidence may be stale.

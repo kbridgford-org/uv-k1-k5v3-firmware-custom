@@ -64,8 +64,15 @@ executable. The setup applies a small compatibility patch for a QEMU
 `.github/workflows/copilot-code-review.yml` is the setup job for Copilot code
 review. Before each review it builds the Fusion firmware, boots it in this
 emulator with a fresh pristine flash, and runs `smoke_test.py`: power on, wait
-for the main screen, then MENU, DOWN, and EXIT, saving a screenshot after each
-step. Each screenshot is uploaded as an unzipped artifact, and
+for nonblank LCD content, then MENU, DOWN, and EXIT, saving a screenshot after
+each step. Screen changes and stability are based on decoded pixels in the main
+display, excluding the top status bar. EXIT is compared with the boot screen
+using that same area, allowing up to 1% of its pixels to differ. The summary
+reports the actual difference and links both screenshots. This is a navigation
+smoke test, not a pixel-perfect or text-content assertion. A mismatch needs
+inspection and does not by itself prove a firmware regression.
+
+Each screenshot is uploaded as an unzipped artifact, and
 `ccr-evidence/SUMMARY.md` lists the results with links. The instructions in
 `.github/instructions/emulator-review.instructions.md` tell Copilot to post
 that table as an "Emulator evidence" review comment. Artifact links require a signed-in user with read
@@ -80,4 +87,12 @@ tools/emulator/run-ci.sh build/Fusion/f4hwn.fusion.bin
 Output goes to `$TMPDIR/ccr-evidence` (or `/tmp/ccr-evidence`) unless you pass
 a second argument. The script exits nonzero if any step fails and writes
 `results.json`, the screenshots, and status, panel, firmware, and log JSON to
-the output directory. Set `UVK5_CI_PORT` if port 18080 is in use.
+the output directory. If the screen does not change or settle, the last
+decodable screenshot is saved when available and later navigation steps are
+skipped. Set `UVK5_CI_PORT` if port 18080 is in use.
+
+Run the smoke-test unit tests with:
+
+```sh
+python3 -m unittest discover -s tools/emulator -p 'test_*.py'
+```
