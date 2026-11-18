@@ -14,9 +14,22 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import zlib
+from dataclasses import dataclass
 from pathlib import Path
 
 EXPECTED_SIZE = (512, 256)
+# The 8-row LCD status bar is scaled 4x in emulator screenshots.
+STATUS_BAR_HEIGHT = 32
+MAX_MAIN_DIFFERENCE_PERCENT = 1
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+@dataclass(frozen=True)
+class Screen:
+    png: bytes
+    status: bytes
+    main: bytes
 
 
 class Emulator:
@@ -55,26 +68,132 @@ class Emulator:
             raise RuntimeError(f"key {name} rejected: HTTP {status} {payload}")
 
 
-def png_size(data):
-    if data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
-        return None
-    return struct.unpack(">II", data[16:24])
+def decode_screen(png):
+    """Decode the emulator's 8-bit grayscale PNG into status and main-screen pixels."""
+    if not png.startswith(PNG_SIGNATURE):
+        raise ValueError("screenshot is not a PNG")
+
+    offset = len(PNG_SIGNATURE)
+    header = None
+    compressed = []
+    ended = False
+    while offset < len(png):
+        if offset + 12 > len(png):
+            raise ValueError("truncated PNG chunk")
+        length = struct.unpack_from(">I", png, offset)[0]
+        end = offset + 12 + length
+        if end > len(png):
+            raise ValueError("truncated PNG chunk")
+        kind = png[offset + 4:offset + 8]
+        data = png[offset + 8:offset + 8 + length]
+        crc = struct.unpack_from(">I", png, offset + 8 + length)[0]
+        if zlib.crc32(kind + data) & 0xFFFFFFFF != crc:
+            raise ValueError(f"invalid PNG checksum in {kind!r}")
+        if header is None:
+            if kind != b"IHDR" or length != 13:
+                raise ValueError("PNG header is missing or invalid")
+            header = struct.unpack(">IIBBBBB", data)
+        elif kind == b"IHDR":
+            raise ValueError("duplicate PNG header")
+        elif kind == b"IDAT":
+            compressed.append(data)
+        elif kind == b"IEND":
+            if length or end != len(png):
+                raise ValueError("invalid PNG end")
+            ended = True
+            break
+        elif kind == b"tRNS":
+            raise ValueError("transparent PNG screenshots are not supported")
+        elif kind[0] & 0x20 == 0:
+            raise ValueError(f"unsupported PNG chunk {kind!r}")
+        offset = end
+
+    if header is None or not compressed or not ended:
+        raise ValueError("incomplete PNG screenshot")
+    width, height, depth, color, compression, filtering, interlace = header
+    if (width, height) != EXPECTED_SIZE:
+        raise ValueError(f"unexpected PNG size {(width, height)}, expected {EXPECTED_SIZE}")
+    if (depth, color, compression, filtering, interlace) != (8, 0, 0, 0, 0):
+        raise ValueError("expected an 8-bit non-interlaced grayscale PNG")
+
+    expected_length = height * (width + 1)
+    try:
+        decompressor = zlib.decompressobj()
+        raw = decompressor.decompress(b"".join(compressed), expected_length + 1)
+    except zlib.error as exc:
+        raise ValueError("invalid PNG image data") from exc
+    if (len(raw) != expected_length or not decompressor.eof
+            or decompressor.unused_data or decompressor.unconsumed_tail):
+        raise ValueError("invalid PNG image data length")
+
+    pixels = bytearray()
+    previous = bytes(width)
+    for y in range(height):
+        start = y * (width + 1)
+        filter_type = raw[start]
+        row = bytearray(raw[start + 1:start + 1 + width])
+        if filter_type > 4:
+            raise ValueError(f"unsupported PNG row filter {filter_type}")
+        if filter_type:
+            for x in range(width):
+                left = row[x - 1] if x else 0
+                up = previous[x]
+                upper_left = previous[x - 1] if x else 0
+                if filter_type == 1:
+                    predictor = left
+                elif filter_type == 2:
+                    predictor = up
+                elif filter_type == 3:
+                    predictor = (left + up) // 2
+                else:
+                    value = left + up - upper_left
+                    distances = (abs(value - left), abs(value - up),
+                                 abs(value - upper_left))
+                    predictor = (left if distances[0] <= distances[1]
+                                 and distances[0] <= distances[2]
+                                 else up if distances[1] <= distances[2]
+                                 else upper_left)
+                row[x] = (row[x] + predictor) & 0xFF
+        pixels.extend(row)
+        previous = row
+
+    status_end = width * STATUS_BAR_HEIGHT
+    return Screen(png, bytes(pixels[:status_end]), bytes(pixels[status_end:]))
 
 
-def wait_for_stable_frame(emu, timeout, previous=None, settle=0.6):
-    """Return the first frame that differs from `previous` and stays put for `settle` s, else None."""
+def main_difference(first, second):
+    return sum(a != b for a, b in zip(first.main, second.main))
+
+
+def main_matches(first, second):
+    return main_difference(first, second) * 100 <= len(first.main) * MAX_MAIN_DIFFERENCE_PERCENT
+
+
+def wait_for_stable_frame(emu, timeout, previous=None, settle=0.6, require_content=False):
+    """Return the last screen and whether its main area changed and settled."""
     deadline = time.monotonic() + timeout
     last = None
+    anchor = None
+    candidate = False
     last_change = time.monotonic()
     while time.monotonic() < deadline:
         frame = emu.frame()
-        if frame is not None and frame != last:
-            last, last_change = frame, time.monotonic()
-        if (last is not None and last != previous
-                and time.monotonic() - last_change >= settle):
-            return last
+        now = time.monotonic()
+        if frame is None:
+            candidate = False
+        elif last is None or frame != last.png or not candidate:
+            screen = last if last is not None and frame == last.png else decode_screen(frame)
+            changed = previous is None or screen.main != previous.main
+            has_content = not require_content or len(set(screen.main)) > 1
+            if not changed or not has_content:
+                candidate = False
+            elif not candidate or not main_matches(screen, anchor):
+                anchor, last_change, candidate = screen, now, True
+            last = screen
+        if frame is not None and candidate and now - last_change >= settle:
+            return last, True
         time.sleep(0.15)
-    return None
+    return last, False
 
 
 def main():
@@ -93,56 +212,66 @@ def main():
         entry = {"step": name, "ok": bool(ok), "detail": detail}
         if screenshot is not None:
             path = args.out / f"{name}.png"
-            path.write_bytes(screenshot)
+            path.write_bytes(screenshot.png)
             entry["screenshot"] = path.name
-            entry["sha256"] = hashlib.sha256(screenshot).hexdigest()
+            entry["sha256"] = hashlib.sha256(screenshot.png).hexdigest()
             frames[name] = screenshot
         steps.append(entry)
         print(f"[{'PASS' if ok else 'FAIL'}] {name}: {detail}", flush=True)
         return ok
 
     def ui_step(name, key, expect_change_from, expect_equal_to=None):
-        before = frames.get(expect_change_from)
+        before = frames[expect_change_from]
         # Under CI load the firmware can miss a key sent right after the last
         # screen change, so pause first and retry once.
         time.sleep(1.0)
         shot = None
         for attempt in (1, 2):
             emu.key(key, hold_ms=200)
-            shot = wait_for_stable_frame(emu, timeout=8, previous=before, settle=1.0)
-            if shot is not None:
+            current, settled = wait_for_stable_frame(emu, timeout=8, previous=before, settle=1.0)
+            if current is not None:
+                shot = current
+            if settled or (current is not None and current.main != before.main):
                 break
-        if shot is None:
-            return record(name, False, f"display did not change after {key} (2 attempts)")
+        if not settled:
+            detail = (f"main display changed after {key} but did not settle"
+                      if shot is not None and shot.main != before.main
+                      else f"main display did not change after {key} (2 attempts)")
+            return record(name, False, detail, shot)
         retry = " on retry" if attempt == 2 else ""
-        size = png_size(shot)
-        if size != EXPECTED_SIZE:
-            return record(name, False, f"unexpected PNG size {size}", shot)
         if expect_equal_to is not None:
-            ok = shot == frames.get(expect_equal_to)
-            detail = (f"{key} returned to the {expect_equal_to} screen{retry}" if ok
-                      else f"{key} did not return to the {expect_equal_to} screen")
+            reference = frames[expect_equal_to]
+            different = main_difference(shot, reference)
+            limit = len(reference.main) * MAX_MAIN_DIFFERENCE_PERCENT // 100
+            ok = main_matches(shot, reference)
+            status = ("status bar differs and was ignored" if shot.status != reference.status
+                      else "status bar ignored")
+            detail = (f"{key} main display {'matches' if ok else 'differs from'} "
+                      f"{expect_equal_to}{retry}: {different}/{len(reference.main)} pixels "
+                      f"differ (limit {limit}; {status})")
         else:
-            ok = shot != before
-            detail = f"{key} changed the display{retry}"
+            ok = True
+            detail = f"{key} changed the main display{retry}"
         return record(name, ok, detail, shot)
 
     try:
         status, payload = emu.json("POST", "/api/power/on", timeout=30)
-        record("power_on", status == 200 and payload.get("powered"),
-               f"HTTP {status}, powered={payload.get('powered')}")
+        powered = record("power_on", status == 200 and payload.get("powered"),
+                         f"HTTP {status}, powered={payload.get('powered')}")
 
-        # Init stalls ~3 s on flash setup, then a splash precedes the main screen.
-        shot = wait_for_stable_frame(emu, timeout=args.boot_timeout, settle=5)
-        size = png_size(shot) if shot else None
-        record("boot", shot is not None and size == EXPECTED_SIZE,
-               f"main screen rendered at {size}" if shot else "LCD did not settle before timeout",
-               shot)
+        if powered:
+            # Init stalls ~3 s on flash setup, then a splash precedes the main screen.
+            shot, settled = wait_for_stable_frame(
+                emu, timeout=args.boot_timeout, settle=5, require_content=True)
+            booted = record(
+                "boot", settled,
+                f"nonblank LCD content settled at {EXPECTED_SIZE}" if settled
+                else "LCD did not show nonblank, stable content before timeout",
+                shot)
 
-        if "boot" in frames:
-            ui_step("menu", "MENU", expect_change_from="boot")
-            ui_step("menu_next", "DOWN", expect_change_from="menu")
-            ui_step("home", "EXIT", expect_change_from="menu_next", expect_equal_to="boot")
+            if (booted and ui_step("menu", "MENU", expect_change_from="boot")
+                    and ui_step("menu_next", "DOWN", expect_change_from="menu")):
+                ui_step("home", "EXIT", expect_change_from="menu_next", expect_equal_to="boot")
     except Exception as exc:  # report, never crash: CI and Copilot read results.json
         record("harness", False, f"{type(exc).__name__}: {exc}")
 
