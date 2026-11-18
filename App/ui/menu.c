@@ -565,7 +565,7 @@ uint8_t UI_MENU_GetViewPos(uint8_t id)
 // tel quel, donc ordre et numeros d'origine preserves.
 const char *const CategoryNames[CAT_COUNT] = {
     [CAT_CHANNELS] = "Channels",
-    [CAT_SCAN]     = "Scan",
+    [CAT_SCAN]     = "Scanner",
     [CAT_KEYS]     = "Keys",
     [CAT_POWER]    = "Power",
     [CAT_DISPLAY]  = "Display",
